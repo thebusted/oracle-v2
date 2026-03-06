@@ -19,6 +19,9 @@ import { ChromaMcpClient } from './chroma-mcp.ts';
 import path from 'path';
 import fs from 'fs';
 
+// Reserve stdout for MCP protocol frames only.
+console.log = (...args: unknown[]) => console.error(...args);
+
 // Tool handlers (all extracted to src/tools/)
 import type { ToolContext } from './tools/types.ts';
 import {
