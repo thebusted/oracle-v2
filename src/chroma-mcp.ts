@@ -69,7 +69,7 @@ export class ChromaMcpClient {
       return;
     }
 
-    console.log('Connecting to chroma-mcp server...');
+    console.error('Connecting to chroma-mcp server...');
     const timeout = parseInt(process.env.ORACLE_CHROMA_TIMEOUT || '10000', 10);
 
     try {
@@ -99,7 +99,7 @@ export class ChromaMcpClient {
       ]);
       this.connected = true;
 
-      console.log('Connected to chroma-mcp server');
+      console.error('Connected to chroma-mcp server');
     } catch (error) {
       this.resetConnection();
       throw new Error(`Chroma connection failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -142,7 +142,7 @@ export class ChromaMcpClient {
       }
     }
 
-    console.log('Chroma client and subprocess closed');
+    console.error('Chroma client and subprocess closed');
     this.resetConnection();
   }
 
@@ -164,11 +164,11 @@ export class ChromaMcpClient {
           collection_name: this.collectionName
         }
       });
-      console.log(`Collection '${this.collectionName}' exists`);
+      console.error(`Collection '${this.collectionName}' exists`);
     } catch (error) {
       // Collection may not exist — or this could be a connection error
       console.warn('[ChromaMCP] ensureCollection get failed, attempting create:', error instanceof Error ? error.message : String(error));
-      console.log(`Creating collection '${this.collectionName}'...`);
+      console.error(`Creating collection '${this.collectionName}'...`);
       await this.client.callTool({
         name: 'chroma_create_collection',
         arguments: {
@@ -176,7 +176,7 @@ export class ChromaMcpClient {
           embedding_function_name: 'default'
         }
       });
-      console.log(`Collection '${this.collectionName}' created`);
+      console.error(`Collection '${this.collectionName}' created`);
     }
   }
 
@@ -197,7 +197,7 @@ export class ChromaMcpClient {
           collection_name: this.collectionName
         }
       });
-      console.log(`Collection '${this.collectionName}' deleted`);
+      console.error(`Collection '${this.collectionName}' deleted`);
     } catch (error) {
       console.warn('[ChromaMCP] deleteCollection failed (may not exist):', error instanceof Error ? error.message : String(error));
     }
@@ -227,7 +227,7 @@ export class ChromaMcpClient {
       }
     });
 
-    console.log(`Added ${documents.length} documents to collection`);
+    console.error(`Added ${documents.length} documents to collection`);
   }
 
   /**
@@ -273,7 +273,7 @@ export class ChromaMcpClient {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes('Not connected')) {
         // Reconnect and retry
-        console.log('Connection lost, reconnecting...');
+        console.error('Connection lost, reconnecting...');
         this.resetConnection();
         await this.connect();
         result = await this.client!.callTool({
