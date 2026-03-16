@@ -1,5 +1,5 @@
 /**
- * Oracle Nightly MCP Server
+ * Arra Oracle MCP Server
  *
  * Slim entry point: server lifecycle, tool registration, and routing.
  * Handler implementations live in src/tools/.
