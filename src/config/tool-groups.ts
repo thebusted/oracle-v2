@@ -13,9 +13,8 @@ import path from 'path';
 
 export const TOOL_GROUPS = {
   search: ['arra_search', 'arra_read', 'arra_list', 'arra_concepts'],
-  knowledge: ['arra_learn', 'arra_reflect', 'arra_stats', 'arra_supersede', 'arra_verify'],
+  knowledge: ['arra_learn', 'arra_stats', 'arra_supersede'],
   session: ['arra_handoff', 'arra_inbox'],
-  schedule: ['arra_schedule_add', 'arra_schedule_list'],
   forum: ['arra_thread', 'arra_threads', 'arra_thread_read', 'arra_thread_update'],
   trace: ['arra_trace', 'arra_trace_list', 'arra_trace_get', 'arra_trace_link', 'arra_trace_unlink', 'arra_trace_chain'],
 } as const;
@@ -28,7 +27,6 @@ const DEFAULT_CONFIG: ToolGroupConfig = {
   search: true,
   knowledge: true,
   session: true,
-  schedule: true,
   forum: true,
   trace: true,
 };

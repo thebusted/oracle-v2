@@ -49,7 +49,7 @@ export function createVectorStore(config: VectorStoreConfig = {}): VectorStoreAd
 
   const type = config.type
     || (process.env.ORACLE_VECTOR_DB as VectorDBType)
-    || 'chroma';
+    || 'lancedb';
 
   const collectionName = config.collectionName || 'oracle_knowledge';
 
