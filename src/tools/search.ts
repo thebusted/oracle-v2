@@ -8,10 +8,11 @@
 
 import { logSearch } from '../server/logging.ts';
 import { detectProject } from '../server/project-detect.ts';
+import { ensureVectorStoreConnected } from '../vector/factory.ts';
 import type { ToolContext, ToolResponse, OracleSearchInput } from './types.ts';
 
 export const searchToolDef = {
-  name: 'oracle_search',
+  name: 'arra_search',
   description: 'Search Oracle knowledge base using hybrid search (FTS5 keywords + ChromaDB vectors). Finds relevant principles, patterns, learnings, or retrospectives. Falls back to FTS5-only if ChromaDB unavailable.',
   inputSchema: {
     type: 'object',
@@ -49,6 +50,11 @@ export const searchToolDef = {
       cwd: {
         type: 'string',
         description: 'Auto-detect project from working directory path (follows symlinks to ghq paths)'
+      },
+      model: {
+        type: 'string',
+        enum: ['nomic', 'qwen3', 'bge-m3'],
+        description: 'Embedding model: bge-m3 (default, multilingual Thai↔EN, 1024-dim), nomic (fast, 768-dim), or qwen3 (cross-language, 4096-dim)',
       }
     },
     required: ['query']
@@ -112,7 +118,8 @@ export async function vectorSearch(
   ctx: ToolContext,
   query: string,
   type: string,
-  limit: number
+  limit: number,
+  model?: string
 ): Promise<Array<{
   id: string;
   type: string;
@@ -120,19 +127,23 @@ export async function vectorSearch(
   source_file: string;
   concepts: string[];
   score: number;
+  distance: number;
+  model: string;
   source: 'vector';
 }>> {
   try {
     const whereFilter = type !== 'all' ? { type } : undefined;
-    console.error(`[VectorSearch] Query: "${query.substring(0, 50)}..." limit=${limit}`);
+    const store = model ? await ensureVectorStoreConnected(model) : ctx.vectorStore;
+    console.error(`[VectorSearch] Query: "${query.substring(0, 50)}..." limit=${limit} model=${model || 'default'}`);
 
-    const results = await ctx.chromaMcp.query(query, limit, whereFilter);
+    const results = await store.query(query, limit, whereFilter);
     console.error(`[VectorSearch] Results: ${results.ids?.length || 0} documents`);
 
     if (!results.ids || results.ids.length === 0) {
       return [];
     }
 
+    const resolvedModelName = model || 'bge-m3';
     const mappedResults: Array<{
       id: string;
       type: string;
@@ -140,19 +151,24 @@ export async function vectorSearch(
       source_file: string;
       concepts: string[];
       score: number;
+      distance: number;
+      model: string;
       source: 'vector';
     }> = [];
 
     for (let i = 0; i < results.ids.length; i++) {
       const metadata = results.metadatas[i] as Record<string, unknown> | null;
 
+      const rawDistance = results.distances[i] || 0;
       mappedResults.push({
         id: results.ids[i],
         type: (metadata?.type as string) || 'unknown',
         content: (results.documents[i] || '').substring(0, 500),
         source_file: (metadata?.source_file as string) || '',
         concepts: parseConceptsFromMetadata(metadata?.concepts),
-        score: results.distances[i] || 0,
+        score: rawDistance,
+        distance: rawDistance,
+        model: resolvedModelName,
         source: 'vector',
       });
     }
@@ -186,6 +202,8 @@ export function combineResults(
     source_file: string;
     concepts: string[];
     score: number;
+    distance: number;
+    model: string;
     source: 'vector';
   }>,
   ftsWeight: number = 0.5,
@@ -200,6 +218,8 @@ export function combineResults(
   source: 'fts' | 'vector' | 'hybrid';
   ftsScore?: number;
   vectorScore?: number;
+  distance?: number;
+  model?: string;
 }> {
   const resultMap = new Map<string, {
     id: string;
@@ -209,6 +229,8 @@ export function combineResults(
     concepts: string[];
     ftsScore?: number;
     vectorScore?: number;
+    distance?: number;
+    model?: string;
     source: 'fts' | 'vector' | 'hybrid';
   }>();
 
@@ -231,6 +253,8 @@ export function combineResults(
     if (existing) {
       existing.vectorScore = result.score;
       existing.source = 'hybrid';
+      existing.distance = result.distance;
+      existing.model = result.model;
     } else {
       resultMap.set(result.id, {
         id: result.id,
@@ -239,6 +263,8 @@ export function combineResults(
         source_file: result.source_file,
         concepts: result.concepts,
         vectorScore: result.score,
+        distance: result.distance,
+        model: result.model,
         source: 'vector',
       });
     }
@@ -268,6 +294,8 @@ export function combineResults(
       source: result.source,
       ftsScore: result.ftsScore,
       vectorScore: result.vectorScore,
+      distance: result.distance,
+      model: result.model,
     };
   });
 
@@ -281,7 +309,7 @@ export function combineResults(
 
 export async function handleSearch(ctx: ToolContext, input: OracleSearchInput): Promise<ToolResponse> {
   const startTime = Date.now();
-  const { query, type = 'all', limit = 5, offset = 0, mode = 'hybrid', project, cwd } = input;
+  const { query, type = 'all', limit = 5, offset = 0, mode = 'hybrid', project, cwd, model } = input;
 
   if (!query || query.trim().length === 0) {
     throw new Error('Query cannot be empty');
@@ -332,7 +360,7 @@ export async function handleSearch(ctx: ToolContext, input: OracleSearchInput): 
   let vecResults: Awaited<ReturnType<typeof vectorSearch>> = [];
   if (mode !== 'fts') {
     try {
-      vecResults = await vectorSearch(ctx, query, type, limit * 2);
+      vecResults = await vectorSearch(ctx, query, type, limit * 2, model);
     } catch (error) {
       vectorSearchError = true;
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -396,7 +424,7 @@ export async function handleSearch(ctx: ToolContext, input: OracleSearchInput): 
     metadata.warning = warning;
   }
 
-  console.error(`[MCP:SEARCH] "${query}" (${type}, ${mode}) → ${results.length} results in ${searchTime}ms`);
+  console.error(`[MCP:SEARCH] "${query}" (${type}, ${mode}, model=${model || 'default'}) → ${results.length} results in ${searchTime}ms`);
 
   try {
     logSearch(query, type, mode, results.length, searchTime, results);

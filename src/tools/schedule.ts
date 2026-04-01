@@ -2,7 +2,7 @@
  * Oracle Schedule Handler (Drizzle DB)
  *
  * Source of truth: `schedule` table in oracle.db
- * Auto-exports to ~/.oracle/ψ/inbox/schedule.md on write.
+ * Auto-exports to ORACLE_DATA_DIR/ψ/inbox/schedule.md on write (see const.ts).
  *
  * Supports:
  * - Add/list events with proper YYYY-MM-DD date queries
@@ -12,16 +12,14 @@
  */
 
 import fs from 'fs';
-import os from 'os';
 import path from 'path';
 import { eq, and, gte, lte, like, asc, or } from 'drizzle-orm';
 import { schedule } from '../db/schema.ts';
 import type { ToolContext, ToolResponse, OracleScheduleAddInput, OracleScheduleListInput } from './types.ts';
-
-const SCHEDULE_REL = 'ψ/inbox/schedule.md';
+import { SCHEDULE_PATH } from '../config.ts';
 
 function getSchedulePath(): string {
-  return path.join(os.homedir(), '.oracle', SCHEDULE_REL);
+  return SCHEDULE_PATH;
 }
 
 const MONTHS: Record<string, number> = {
@@ -116,7 +114,7 @@ function fmtLocal(d: Date): string {
 // ============================================================================
 
 export const scheduleAddToolDef = {
-  name: 'oracle_schedule_add',
+  name: 'arra_schedule_add',
   description: 'Add an appointment or event to the shared schedule. The schedule is per-human (not per-project) and shared across all Oracles.',
   inputSchema: {
     type: 'object',
@@ -148,7 +146,7 @@ export const scheduleAddToolDef = {
 };
 
 export const scheduleListToolDef = {
-  name: 'oracle_schedule_list',
+  name: 'arra_schedule_list',
   description: 'List appointments from the shared schedule. Filter by date, range, or keyword. Defaults to today + 14 days.',
   inputSchema: {
     type: 'object',
@@ -339,7 +337,7 @@ function exportScheduleToMarkdown(ctx: ToolContext): void {
     }
   }
 
-  md += `\n---\n\nManaged by Oracle. Add events via \`oracle_schedule_add\` or the web UI.\n`;
+  md += `\n---\n\nManaged by Oracle. Add events via \`arra_schedule_add\` or the web UI.\n`;
 
   const schedulePath = getSchedulePath();
   fs.mkdirSync(path.dirname(schedulePath), { recursive: true });

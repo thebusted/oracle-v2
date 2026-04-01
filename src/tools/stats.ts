@@ -9,7 +9,7 @@ import { oracleDocuments } from '../db/schema.ts';
 import type { ToolContext, ToolResponse, OracleStatsInput } from './types.ts';
 
 export const statsToolDef = {
-  name: 'oracle_stats',
+  name: 'arra_stats',
   description: 'Get Oracle knowledge base statistics and health status. Returns document counts by type, indexing status, and ChromaDB connection status.',
   inputSchema: {
     type: 'object',
@@ -70,7 +70,7 @@ export async function handleStats(ctx: ToolContext, _input: OracleStatsInput): P
         last_indexed: lastIndexed?.lastIndexed
           ? new Date(lastIndexed.lastIndexed).toISOString()
           : null,
-        chroma_status: ctx.chromaStatus,
+        vector_status: ctx.vectorStatus,
         fts_status: ftsCount.count > 0 ? 'healthy' : 'empty',
         version: ctx.version,
       }, null, 2)

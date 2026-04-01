@@ -1,5 +1,5 @@
 #!/bin/bash
-# Setup oracle-v2 with frontend build
+# Setup arra-oracle-v2 with frontend build
 set -e
 
 echo "🔧 Installing root dependencies..."
