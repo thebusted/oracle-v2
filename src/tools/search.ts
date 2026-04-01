@@ -143,7 +143,7 @@ export async function vectorSearch(
       return [];
     }
 
-    const resolvedModelName = model || 'bge-m3';
+    const resolvedModelName = model || process.env.ORACLE_EMBEDDING_MODEL || 'nomic-embed-text';
     const mappedResults: Array<{
       id: string;
       type: string;

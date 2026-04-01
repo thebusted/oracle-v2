@@ -32,7 +32,7 @@ export class OllamaEmbeddings implements EmbeddingProvider {
 
   constructor(config: { baseUrl?: string; model?: string } = {}) {
     this.baseUrl = config.baseUrl || process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
-    this.model = config.model || 'nomic-embed-text';
+    this.model = config.model || process.env.ORACLE_EMBEDDING_MODEL || 'nomic-embed-text';
     // Known model dimensions (fallback before auto-detect)
     const KNOWN_DIMS: Record<string, number> = {
       'nomic-embed-text': 768,
@@ -48,25 +48,47 @@ export class OllamaEmbeddings implements EmbeddingProvider {
     const embeddings: number[][] = [];
 
     for (const text of texts) {
-      // Truncate to ~2000 chars — Thai text uses 2-3x more tokens than English
-      const truncated = text.length > 2000 ? text.slice(0, 2000) : text;
-      const response = await fetch(`${this.baseUrl}/api/embeddings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: this.model, prompt: truncated }),
-      });
+      // Pad empty/short texts to avoid NaN from bge-m3
+      let input = text.trim();
+      if (input.length < 10) input = input.padEnd(10, '.');
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Ollama API error: ${error}`);
+      // Truncate to ~2000 chars — Thai text uses 2-3x more tokens than English
+      const truncated = input.length > 2000 ? input.slice(0, 2000) : input;
+
+      let data: { embedding: number[] };
+      try {
+        const response = await fetch(`${this.baseUrl}/api/embeddings`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: this.model, prompt: truncated }),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          // NaN bug: bge-m3 sometimes produces NaN for certain inputs
+          if (error.includes('NaN') || error.includes('unsupported value')) {
+            console.error(`[Embed] NaN for text (${truncated.length} chars), using zero vector`);
+            embeddings.push(new Array(this.dimensions).fill(0));
+            continue;
+          }
+          throw new Error(`Ollama API error: ${error}`);
+        }
+
+        data = await response.json() as { embedding: number[] };
+      } catch (e) {
+        if (e instanceof Error && e.message.includes('Ollama API error')) throw e;
+        console.error(`[Embed] Failed: ${e instanceof Error ? e.message : e}`);
+        embeddings.push(new Array(this.dimensions).fill(0));
+        continue;
       }
 
-      const data = await response.json() as { embedding: number[] };
-      embeddings.push(data.embedding);
+      // Replace any NaN values with 0
+      const cleaned = data.embedding.map(v => Number.isNaN(v) ? 0 : v);
+      embeddings.push(cleaned);
 
       // Auto-detect dimensions from first response
-      if (!this._dimensionsDetected && data.embedding.length > 0) {
-        this.dimensions = data.embedding.length;
+      if (!this._dimensionsDetected && cleaned.length > 0) {
+        this.dimensions = cleaned.length;
         this._dimensionsDetected = true;
       }
     }
