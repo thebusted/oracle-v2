@@ -1,6 +1,6 @@
 /**
  * HTTP API Integration Tests
- * Tests arra-oracle server endpoints (see const.ts for server name)
+ * Tests oracle-v2 server endpoints (see const.ts for server name)
  */
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import type { Subprocess } from "bun";

@@ -20,7 +20,7 @@ export function coerceConcepts(concepts: unknown): string[] {
 }
 
 export const learnToolDef = {
-  name: 'arra_learn',
+  name: 'oracle_learn',
   description: 'Add a new pattern or learning to the Oracle knowledge base. Creates a markdown file in ψ/memory/learnings/ and indexes it.',
   inputSchema: {
     type: 'object',
@@ -80,7 +80,7 @@ export function normalizeProject(input?: string): string | null {
 
 /**
  * Extract project from source field (fallback).
- * Handles "arra_learn from github.com/owner/repo" and "rrr: org/repo" formats.
+ * Handles "oracle_learn from github.com/owner/repo" and "rrr: org/repo" formats.
  */
 export function extractProjectFromSource(source?: string): string | null {
   if (!source) return null;
@@ -178,7 +178,7 @@ export async function handleLearn(ctx: ToolContext, input: OracleLearnInput): Pr
     indexedAt: now.getTime(),
     origin: null,
     project,
-    createdBy: 'arra_learn',
+    createdBy: 'oracle_learn',
   }).run();
 
   ctx.sqlite.prepare(`

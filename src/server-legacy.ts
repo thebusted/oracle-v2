@@ -31,9 +31,6 @@ import {
   PORT,
   REPO_ROOT,
   DB_PATH,
-  UI_PATH,
-  ARTHUR_UI_PATH,
-  DASHBOARD_PATH,
 } from './config.ts';
 import { MCP_SERVER_NAME } from './const.ts';
 import { sqlite as db, closeDb } from './db/index.ts';
@@ -278,24 +275,20 @@ const server = http.createServer(async (req, res) => {
           res.end(fs.readFileSync(rootIndex));
         } else {
           // Fallback to old Arthur UI if no build exists
-          res.end(fs.readFileSync(ARTHUR_UI_PATH, 'utf-8'));
         }
         return;
 
       // Legacy HTML UIs
       case '/legacy/arthur':
         res.setHeader('Content-Type', 'text/html');
-        res.end(fs.readFileSync(ARTHUR_UI_PATH, 'utf-8'));
         return;
 
       case '/legacy/oracle':
         res.setHeader('Content-Type', 'text/html');
-        res.end(fs.readFileSync(UI_PATH, 'utf-8'));
         return;
 
       case '/legacy/dashboard':
         res.setHeader('Content-Type', 'text/html');
-        res.end(fs.readFileSync(DASHBOARD_PATH, 'utf-8'));
         return;
 
       case '/api/health':

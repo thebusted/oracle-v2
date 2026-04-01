@@ -68,12 +68,12 @@ import type {
 
 // Write tools that should be disabled in read-only mode
 const WRITE_TOOLS = [
-  'arra_learn',
-  'arra_thread',
-  'arra_thread_update',
-  'arra_trace',
-  'arra_supersede',
-  'arra_handoff',
+  'oracle_learn',
+  'oracle_thread',
+  'oracle_thread_update',
+  'oracle_trace',
+  'oracle_supersede',
+  'oracle_handoff',
 ];
 
 class OracleMCPServer {
@@ -174,7 +174,7 @@ class OracleMCPServer {
         // Meta-documentation tool
         {
           name: '____IMPORTANT',
-          description: `ORACLE WORKFLOW GUIDE (v${this.version}):\n\n1. SEARCH & DISCOVER\n   arra_search(query) → Find knowledge by keywords/vectors\n   arra_read(file/id) → Read full document content\n   arra_list() → Browse all documents\n   arra_concepts() → See topic coverage\n\n2. LEARN & REMEMBER\n   arra_learn(pattern) → Add new patterns/learnings\n   arra_thread(message) → Multi-turn discussions\n   ⚠️ BEFORE adding: search for similar topics first!\n   If updating old info → use arra_supersede(oldId, newId)\n\n3. TRACE & DISTILL\n   arra_trace(query) → Log discovery sessions with dig points\n   arra_trace_list() → Find past traces\n   arra_trace_get(id) → Explore dig points (files, commits, issues)\n   arra_trace_link(prevId, nextId) → Chain related traces together\n   arra_trace_chain(id) → View the full linked chain\n\n4. HANDOFF & INBOX\n   arra_handoff(content) → Save session context for next session\n   arra_inbox() → List pending handoffs\n\n5. SUPERSEDE (when info changes)\n   arra_supersede(oldId, newId, reason) → Mark old doc as outdated\n   "Nothing is Deleted" — old preserved, just marked superseded\n\nPhilosophy: "Nothing is Deleted" — All interactions logged.`,
+          description: `ORACLE WORKFLOW GUIDE (v${this.version}):\n\n1. SEARCH & DISCOVER\n   oracle_search(query) → Find knowledge by keywords/vectors\n   oracle_read(file/id) → Read full document content\n   oracle_list() → Browse all documents\n   oracle_concepts() → See topic coverage\n\n2. LEARN & REMEMBER\n   oracle_learn(pattern) → Add new patterns/learnings\n   oracle_thread(message) → Multi-turn discussions\n   ⚠️ BEFORE adding: search for similar topics first!\n   If updating old info → use oracle_supersede(oldId, newId)\n\n3. TRACE & DISTILL\n   oracle_trace(query) → Log discovery sessions with dig points\n   oracle_trace_list() → Find past traces\n   oracle_trace_get(id) → Explore dig points (files, commits, issues)\n   oracle_trace_link(prevId, nextId) → Chain related traces together\n   oracle_trace_chain(id) → View the full linked chain\n\n4. HANDOFF & INBOX\n   oracle_handoff(content) → Save session context for next session\n   oracle_inbox() → List pending handoffs\n\n5. SUPERSEDE (when info changes)\n   oracle_supersede(oldId, newId, reason) → Mark old doc as outdated\n   "Nothing is Deleted" — old preserved, just marked superseded\n\nPhilosophy: "Nothing is Deleted" — All interactions logged.`,
           inputSchema: { type: 'object', properties: {} }
         },
         // Core tools (from src/tools/)
@@ -231,46 +231,46 @@ class OracleMCPServer {
       try {
         switch (request.params.name) {
           // Core tools (delegated to src/tools/)
-          case 'arra_search':
+          case 'oracle_search':
             return await handleSearch(ctx, request.params.arguments as unknown as OracleSearchInput);
-          case 'arra_read':
+          case 'oracle_read':
             return await handleRead(ctx, request.params.arguments as unknown as OracleReadInput);
-          case 'arra_learn':
+          case 'oracle_learn':
             return await handleLearn(ctx, request.params.arguments as unknown as OracleLearnInput);
-          case 'arra_list':
+          case 'oracle_list':
             return await handleList(ctx, request.params.arguments as unknown as OracleListInput);
-          case 'arra_stats':
+          case 'oracle_stats':
             return await handleStats(ctx, request.params.arguments as unknown as OracleStatsInput);
-          case 'arra_concepts':
+          case 'oracle_concepts':
             return await handleConcepts(ctx, request.params.arguments as unknown as OracleConceptsInput);
-          case 'arra_supersede':
+          case 'oracle_supersede':
             return await handleSupersede(ctx, request.params.arguments as unknown as OracleSupersededInput);
-          case 'arra_handoff':
+          case 'oracle_handoff':
             return await handleHandoff(ctx, request.params.arguments as unknown as OracleHandoffInput);
-          case 'arra_inbox':
+          case 'oracle_inbox':
             return await handleInbox(ctx, request.params.arguments as unknown as OracleInboxInput);
           // Forum tools (delegated to src/tools/forum.ts)
-          case 'arra_thread':
+          case 'oracle_thread':
             return await handleThread(request.params.arguments as unknown as OracleThreadInput);
-          case 'arra_threads':
+          case 'oracle_threads':
             return await handleThreads(request.params.arguments as unknown as OracleThreadsInput);
-          case 'arra_thread_read':
+          case 'oracle_thread_read':
             return await handleThreadRead(request.params.arguments as unknown as OracleThreadReadInput);
-          case 'arra_thread_update':
+          case 'oracle_thread_update':
             return await handleThreadUpdate(request.params.arguments as unknown as OracleThreadUpdateInput);
 
           // Trace tools (delegated to src/tools/trace.ts)
-          case 'arra_trace':
+          case 'oracle_trace':
             return await handleTrace(request.params.arguments as unknown as CreateTraceInput);
-          case 'arra_trace_list':
+          case 'oracle_trace_list':
             return await handleTraceList(request.params.arguments as unknown as ListTracesInput);
-          case 'arra_trace_get':
+          case 'oracle_trace_get':
             return await handleTraceGet(request.params.arguments as unknown as GetTraceInput);
-          case 'arra_trace_link':
+          case 'oracle_trace_link':
             return await handleTraceLink(request.params.arguments as unknown as { prevTraceId: string; nextTraceId: string });
-          case 'arra_trace_unlink':
+          case 'oracle_trace_unlink':
             return await handleTraceUnlink(request.params.arguments as unknown as { traceId: string; direction: 'prev' | 'next' });
-          case 'arra_trace_chain':
+          case 'oracle_trace_chain':
             return await handleTraceChain(request.params.arguments as unknown as { traceId: string });
 
           default:
