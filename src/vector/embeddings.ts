@@ -45,51 +45,81 @@ export class OllamaEmbeddings implements EmbeddingProvider {
   }
 
   async embed(texts: string[]): Promise<number[][]> {
+    // Preprocess: pad short texts, truncate long texts
+    const prepared = texts.map(text => {
+      let input = text.trim();
+      if (input.length < 10) input = input.padEnd(10, '.');
+      return input.length > 2000 ? input.slice(0, 2000) : input;
+    });
+
+    // Batch embed via /api/embed (array input, ~3x faster than single /api/embeddings)
+    try {
+      const response = await fetch(`${this.baseUrl}/api/embed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: this.model, input: prepared }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        if (error.includes('NaN') || error.includes('unsupported value')) {
+          console.error(`[Embed] NaN in batch (${prepared.length} texts), falling back to single mode`);
+          return this.embedSingle(prepared);
+        }
+        throw new Error(`Ollama API error: ${error}`);
+      }
+
+      const data = await response.json() as { embeddings: number[][] };
+
+      // Auto-detect dimensions from first response
+      if (!this._dimensionsDetected && data.embeddings.length > 0 && data.embeddings[0].length > 0) {
+        this.dimensions = data.embeddings[0].length;
+        this._dimensionsDetected = true;
+      }
+
+      // Replace any NaN values with 0
+      return data.embeddings.map(emb => emb.map(v => Number.isNaN(v) ? 0 : v));
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('Ollama API error')) throw e;
+      console.error(`[Embed] Batch failed, falling back to single mode: ${e instanceof Error ? e.message : e}`);
+      return this.embedSingle(prepared);
+    }
+  }
+
+  /** Fallback: embed one text at a time (slower but handles NaN per-doc) */
+  private async embedSingle(texts: string[]): Promise<number[][]> {
     const embeddings: number[][] = [];
 
     for (const text of texts) {
-      // Pad empty/short texts to avoid NaN from bge-m3
-      let input = text.trim();
-      if (input.length < 10) input = input.padEnd(10, '.');
-
-      // Truncate to ~2000 chars — Thai text uses 2-3x more tokens than English
-      const truncated = input.length > 2000 ? input.slice(0, 2000) : input;
-
-      let data: { embedding: number[] };
       try {
         const response = await fetch(`${this.baseUrl}/api/embeddings`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: this.model, prompt: truncated }),
+          body: JSON.stringify({ model: this.model, prompt: text }),
         });
 
         if (!response.ok) {
           const error = await response.text();
-          // NaN bug: bge-m3 sometimes produces NaN for certain inputs
           if (error.includes('NaN') || error.includes('unsupported value')) {
-            console.error(`[Embed] NaN for text (${truncated.length} chars), using zero vector`);
+            console.error(`[Embed] NaN for text (${text.length} chars), using zero vector`);
             embeddings.push(new Array(this.dimensions).fill(0));
             continue;
           }
           throw new Error(`Ollama API error: ${error}`);
         }
 
-        data = await response.json() as { embedding: number[] };
+        const data = await response.json() as { embedding: number[] };
+        const cleaned = data.embedding.map(v => Number.isNaN(v) ? 0 : v);
+        embeddings.push(cleaned);
+
+        if (!this._dimensionsDetected && cleaned.length > 0) {
+          this.dimensions = cleaned.length;
+          this._dimensionsDetected = true;
+        }
       } catch (e) {
         if (e instanceof Error && e.message.includes('Ollama API error')) throw e;
         console.error(`[Embed] Failed: ${e instanceof Error ? e.message : e}`);
         embeddings.push(new Array(this.dimensions).fill(0));
-        continue;
-      }
-
-      // Replace any NaN values with 0
-      const cleaned = data.embedding.map(v => Number.isNaN(v) ? 0 : v);
-      embeddings.push(cleaned);
-
-      // Auto-detect dimensions from first response
-      if (!this._dimensionsDetected && cleaned.length > 0) {
-        this.dimensions = cleaned.length;
-        this._dimensionsDetected = true;
       }
     }
 
