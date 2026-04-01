@@ -27,7 +27,7 @@ const oracleDataDir = process.env.ORACLE_DATA_DIR || path.join(homeDir, '.oracle
 const config: IndexerConfig = {
   repoRoot,
   dbPath: process.env.ORACLE_DB_PATH || path.join(oracleDataDir, 'oracle.db'),
-  chromaPath: path.join(homeDir, '.chromadb'),
+  vectorPath: path.join(homeDir, '.chromadb'),
   sourcePaths: {
     resonance: 'ψ/memory/resonance',
     learnings: 'ψ/memory/learnings',
@@ -329,7 +329,7 @@ async function main() {
   // Initialize Chroma (optional)
   let chromaClient: ChromaMcpClient | null = null;
   try {
-    chromaClient = new ChromaMcpClient('oracle_knowledge', config.chromaPath, '3.12');
+    chromaClient = new ChromaMcpClient('oracle_knowledge', config.vectorPath, '3.12');
     await chromaClient.ensureCollection();
     console.log('✅ ChromaDB connected');
   } catch (e) {
