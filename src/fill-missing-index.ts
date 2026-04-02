@@ -7,14 +7,16 @@
  * Usage:
  *   ORACLE_REPO_ROOT=/oracle bun run src/fill-missing-index.ts
  *   ORACLE_REPO_ROOT=/oracle bun run src/fill-missing-index.ts --dry-run
+ *   ORACLE_REPO_ROOT=/oracle bun run src/fill-missing-index.ts --vector-only  # re-embed all docs into vector store
  */
 
 import fs from 'fs';
 import path from 'path';
 import { Database } from 'bun:sqlite';
-import { ChromaMcpClient } from './chroma-mcp.js';
+import { createVectorStore } from './vector/factory.ts';
 import { detectProject } from './server/project-detect.js';
 import type { OracleDocument, IndexerConfig } from './types.js';
+import type { VectorStoreAdapter, VectorDocument } from './vector/types.ts';
 
 // ============================================
 // Configuration
@@ -27,7 +29,7 @@ const oracleDataDir = process.env.ORACLE_DATA_DIR || path.join(homeDir, '.oracle
 const config: IndexerConfig = {
   repoRoot,
   dbPath: process.env.ORACLE_DB_PATH || path.join(oracleDataDir, 'oracle.db'),
-  vectorPath: path.join(homeDir, '.chromadb'),
+  vectorPath: '', // unused — vector store created via factory
   sourcePaths: {
     resonance: 'ψ/memory/resonance',
     learnings: 'ψ/memory/learnings',
@@ -36,6 +38,7 @@ const config: IndexerConfig = {
 };
 
 const isDryRun = process.argv.includes('--dry-run');
+const isVectorOnly = process.argv.includes('--vector-only');
 
 // ============================================
 // Helper Functions
@@ -287,9 +290,60 @@ async function main() {
   console.log(`📁 Files on disk: ${diskFiles.length}`);
   console.log(`❌ Missing from index: ${missingFiles.length}\n`);
 
-  if (missingFiles.length === 0) {
+  if (missingFiles.length === 0 && !isVectorOnly) {
     console.log('✅ All files are indexed! Nothing to do.');
     db.close();
+    return;
+  }
+
+  // --vector-only: re-embed all existing docs into vector store (backfill)
+  if (isVectorOnly) {
+    console.log('🔄 Vector-only mode: re-embedding all documents from SQLite into vector store\n');
+
+    let vectorStore: VectorStoreAdapter | null = null;
+    try {
+      vectorStore = createVectorStore();
+      await vectorStore.connect();
+      await vectorStore.ensureCollection();
+      console.log(`✅ ${vectorStore.name} connected`);
+    } catch (e) {
+      console.error('❌ Vector store not available, cannot backfill');
+      db.close();
+      return;
+    }
+
+    const allDocs = db.prepare(`
+      SELECT f.id, f.content, f.concepts, d.type, d.source_file
+      FROM oracle_fts f
+      JOIN oracle_documents d ON f.id = d.id
+    `).all() as { id: string; content: string; concepts: string; type: string; source_file: string }[];
+
+    console.log(`📊 Found ${allDocs.length} documents to embed\n`);
+
+    const BATCH_SIZE = 100;
+    let embedded = 0;
+    for (let i = 0; i < allDocs.length; i += BATCH_SIZE) {
+      const batch: VectorDocument[] = allDocs.slice(i, i + BATCH_SIZE).map(doc => ({
+        id: doc.id,
+        document: doc.content,
+        metadata: {
+          type: doc.type,
+          source_file: doc.source_file,
+          concepts: doc.concepts
+        }
+      }));
+      try {
+        await vectorStore.addDocuments(batch);
+        embedded += batch.length;
+        console.log(`✅ Batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(allDocs.length / BATCH_SIZE)} (${embedded}/${allDocs.length})`);
+      } catch (e) {
+        console.error(`❌ Batch failed:`, e);
+      }
+    }
+
+    await vectorStore.close();
+    db.close();
+    console.log(`\n🎉 Done! Embedded ${embedded} documents into vector store.`);
     return;
   }
 
@@ -326,14 +380,15 @@ async function main() {
 
   console.log(`📝 Parsed ${documents.length} documents from ${missingFiles.length} files\n`);
 
-  // Initialize Chroma (optional)
-  let chromaClient: ChromaMcpClient | null = null;
+  // Initialize vector store (LanceDB by default, via factory)
+  let vectorStore: VectorStoreAdapter | null = null;
   try {
-    chromaClient = new ChromaMcpClient('oracle_knowledge', config.vectorPath, '3.12');
-    await chromaClient.ensureCollection();
-    console.log('✅ ChromaDB connected');
+    vectorStore = createVectorStore();
+    await vectorStore.connect();
+    await vectorStore.ensureCollection();
+    console.log(`✅ ${vectorStore.name} connected`);
   } catch (e) {
-    console.log('⚠️  ChromaDB not available, SQLite-only mode');
+    console.log('⚠️  Vector store not available, SQLite-only mode');
   }
 
   // Prepare statements
@@ -351,7 +406,7 @@ async function main() {
   const now = Date.now();
 
   // Insert documents
-  const chromaDocs: { id: string; document: string; metadata: any }[] = [];
+  const vectorDocs: VectorDocument[] = [];
 
   for (const doc of documents) {
     // SQLite
@@ -368,8 +423,8 @@ async function main() {
 
     insertFts.run(doc.id, doc.content, doc.concepts.join(' '));
 
-    // Chroma
-    chromaDocs.push({
+    // Vector store
+    vectorDocs.push({
       id: doc.id,
       document: doc.content,
       metadata: {
@@ -382,19 +437,19 @@ async function main() {
 
   console.log(`✅ Inserted ${documents.length} documents into SQLite`);
 
-  // Batch insert to Chroma
-  if (chromaClient && chromaDocs.length > 0) {
+  // Batch insert to vector store
+  if (vectorStore && vectorDocs.length > 0) {
     const BATCH_SIZE = 100;
-    for (let i = 0; i < chromaDocs.length; i += BATCH_SIZE) {
-      const batch = chromaDocs.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < vectorDocs.length; i += BATCH_SIZE) {
+      const batch = vectorDocs.slice(i, i + BATCH_SIZE);
       try {
-        await chromaClient.addDocuments(batch);
-        console.log(`✅ Chroma batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(chromaDocs.length / BATCH_SIZE)}`);
+        await vectorStore.addDocuments(batch);
+        console.log(`✅ Vector batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(vectorDocs.length / BATCH_SIZE)}`);
       } catch (e) {
-        console.error(`❌ Chroma batch failed:`, e);
+        console.error(`❌ Vector batch failed:`, e);
       }
     }
-    await chromaClient.close();
+    await vectorStore.close();
   }
 
   db.close();

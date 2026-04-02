@@ -186,6 +186,19 @@ export async function handleLearn(ctx: ToolContext, input: OracleLearnInput): Pr
     VALUES (?, ?, ?)
   `).run(id, frontmatter, conceptsList.join(' '));
 
+  // Vector store embedding (immediate searchability)
+  if (ctx.vectorStore && ctx.vectorStatus === 'connected') {
+    try {
+      await ctx.vectorStore.addDocuments([{
+        id,
+        document: frontmatter,
+        metadata: { type: 'learning', source_file: sourceFileRel, concepts: conceptsList.join(',') }
+      }]);
+    } catch (e) {
+      console.error('[oracle_learn] Vector store write failed:', e);
+    }
+  }
+
   return {
     content: [{
       type: 'text',
